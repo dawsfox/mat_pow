@@ -16,6 +16,9 @@ void copy_mat(int *in, int *out, int n);
 // multiplies x by y and stores in out, all square with size nxn
 void mult_mat(int *x, int *y, int *out, int n);
 
+//first arg: file name to input matrix
+//second: n size (nxn of input matrix)
+//third: pow to raise matrix to
 int main(int argc, char *argv[]){
 	int start[N*N];
 	int end[N*N];
