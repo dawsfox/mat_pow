@@ -3,19 +3,15 @@
 #include "e-lib.h"
 #include "e_mat_pow.h"
 
-#define SUM_RESULT 0x2228
-#define INTER_BARRIER 0x2008 //barrier for each multiplication
-#define FINAL_BARRIER 0x200c //barrier for end of computation
-#define STATES_BASE_ADDR 0x3000  /// Chosen randomly
-#define START_SIGNAL STATES_BASE_ADDR // consumer->producer(ready to receieve)
-#define DONE_SIGNAL STATES_BASE_ADDR // producer->consumer (done pushing codelets)
-#define CODQUEUE_ADDR (STATES_BASE_ADDR + 0x4) // Metadata and handler
 
-typedef void (*codeletFunction)();
-
+// all three are in DRAM and placed by the linker script
 params_t _matPowParams __attribute__ ((section(".matPowParams")));
 matrix_space_t _matSpace __attribute__ ((section(".matSpace")));
+flag_t _startFlag __attribute__ ((section(".startFlag")));
 
+// both in local core memory so different copies for each core
+flag_t _interBarrier __attribute__ ((section(".interBarrier")));
+flag_t _finalBarrier __attribute__ ((section(".finalBarrier")));
 
 int main(void)
 {
@@ -23,8 +19,11 @@ int main(void)
 	unsigned this_core_id;
 	GETCOREID(this_core_id);
 	
-	unsigned *inter_bar = (unsigned *) APPEND_COREID(this_core_id, INTER_BARRIER);
-	unsigned *final_bar = (unsigned *) APPEND_COREID(this_core_id, FINAL_BARRIER);
+	flag_t *start_flag = (flag_t *) &(_startFlag);
+	unsigned *inter_bar = (unsigned *) APPEND_COREID(this_core_id, &(_interBarrier));
+	unsigned *final_bar = (unsigned *) APPEND_COREID(this_core_id, &(_finalBarrier));
+
+	while(*start_flag != 1); //wait for start signal
 
 	int pow = _matPowParams.pow;
 	int size = _matPowParams.size;
@@ -44,7 +43,7 @@ int main(void)
 			int sum = size * 2;
 			_matSpace.matrix[0] = sum;
 		}
-		*final = 1; //set barrier locally
+		*final_bar = 1; //set barrier locally
 	}
 	else if (pow == 1) {
 		// copy in parallel based on core ID
@@ -57,20 +56,20 @@ int main(void)
 			// if handles intermediate copies
 			if (l == pow) {
 				// on first run, multiplies in by itself, stores in out
-				mult_mat(in_mat, in_mat, out_mat, size);
+				mult_mat(start, start, end, size);
 			}
 			else {
 				// on every other run, multiplies in by inter
 				// stores in out
-				mult_mat(in_mat, inter, out_mat, size);
+				mult_mat(start, inter, end, size);
 			}
 			if (l > 2) {
 				// copies out back to inter except for last run
-				copy_mat(out_mat, inter, size);
+				copy_mat(end, inter, size);
 			}
 		}
 	}
-
+	*final_bar = 1; //set final signal
 	return 0;
 }
 

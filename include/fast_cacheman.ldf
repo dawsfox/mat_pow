@@ -58,10 +58,10 @@ MEMORY
 	PRINT_MUTEX_POINTER (WXAI)	: ORIGIN = 0x80800068, LENGTH = 0x4
 
 	/* user program, continuous placement */
-	INTERNAL_RAM (WXAI)      : ORIGIN = LENGTH(IVT_RAM) + LENGTH(WORKGROUP_RAM) + LENGTH(PRINT_MUTEX_POINTER) , LENGTH = 32K - LENGTH(IVT_RAM) - LENGTH(WORKGROUP_RAM) - LENGTH(PRINT_MUTEX_POINTER)
+	INTERNAL_RAM (WXAI)      : ORIGIN = LENGTH(IVT_RAM) + LENGTH(WORKGROUP_RAM) + LENGTH(PRINT_MUTEX_POINTER), LENGTH = 32K - LENGTH(IVT_RAM) - LENGTH(WORKGROUP_RAM) - LENGTH(PRINT_MUTEX_POINTER)
 
 	/* user program, per bank usage */
-	BANK0_SRAM (WXAI)        : ORIGIN = LENGTH(IVT_RAM) + LENGTH(WORKGROUP_RAM) + LENGTH(PRINT_MUTEX_POINTER) , LENGTH = 8K  - LENGTH(IVT_RAM) - LENGTH(WORKGROUP_RAM) - LENGTH(PRINT_MUTEX_POINTER)
+	BANK0_SRAM (WXAI)        : ORIGIN = LENGTH(IVT_RAM) + LENGTH(WORKGROUP_RAM) + LENGTH(PRINT_MUTEX_POINTER), LENGTH = 8K  - LENGTH(IVT_RAM) - LENGTH(WORKGROUP_RAM) - LENGTH(PRINT_MUTEX_POINTER)
 	BANK1_SRAM (WXAI)        : ORIGIN = 0x2000, LENGTH = 8K
 	BANK2_SRAM (WXAI)        : ORIGIN = 0x4000, LENGTH = 8K
 	BANK3_SRAM (WXAI)        : ORIGIN = 0x6000, LENGTH = 8K
@@ -125,16 +125,16 @@ SECTIONS
 	    . = 0x10; /* force allocation */
 	  } > WORKGROUP_RAM /* 58 5C 60 64 */
 
-	/* section reserved for interim barrier */
-	.interBarrier : {*(.interBarrier)} > INTERNAL_RAM
 
-	/* section reserved for final barrier */
-	.finalBarrier : {*(.finalBarrier)} > INTERNAL_RAM
+	printingMutex 	 :
+		{
+			*(printingMutex);
+		} > PRINT_MUTEX_POINTER
 
 	/* place the ISR handlers after workgroup-configuration */
-	.reserved_crt0 : {*.o(RESERVED_CRT0) *.o(reserved_crt0)} > INTERNAL_RAM
-	. = ADDR(.reserved_crt0) + SIZEOF(.reserved_crt0);
+	.reserved_crt0  ORIGIN(IVT_RAM) + LENGTH(IVT_RAM) + LENGTH(WORKGROUP_RAM) + LENGTH(PRINT_MUTEX_POINTER) : {*.o(RESERVED_CRT0) *.o(reserved_crt0)} > INTERNAL_RAM
 
+	. = ADDR(.reserved_crt0) + SIZEOF(.reserved_crt0);
 	.data_bank0 . : {*.o(.data_bank0)} > BANK0_SRAM
 	. = ADDR(.data_bank0) + SIZEOF(.data_bank0);
 	.text_bank0 . : {*.o(.text_bank0)} > BANK0_SRAM
@@ -157,14 +157,8 @@ SECTIONS
 	/* create offset with location counter                                    */
 	. = (ORIGIN(EXTERNAL_DRAM_0) + __PROG_SIZE_FOR_CORE_ * __CORE_NUM_);
 
-        /* Reserved for mat_pow params from ARM */
-        .matPowParams . : {*(.matPowParams)} > EXTERNAL_DRAM_0
-
-        /* Reserved section for matrix multiplication space */
-        .matSpace . : {*(.matSpace)} > EXTERNAL_DRAM_0
-
-	/* Reserved section for start computation flag */
-	.startFlag . : {*(.startFlag)} > EXTERNAL_DRAM_0
+        /* Reserved section for print buffer*/
+        .printBuffer . : {*(.printBuffer)} > EXTERNAL_DRAM_0
 
 	NEW_LIB_RO           . : {lib_a-*.o(.text  .rodata)  *.o(libgloss_epiphany) } > EXTERNAL_DRAM_0
 	NEW_LIB_WR           . : {lib_a-*.o(.data)                                  } > EXTERNAL_DRAM_0

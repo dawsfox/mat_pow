@@ -1,17 +1,20 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <time.h>
 #include "e-hal.h"
 #include "e-loader.h"
 
-#define INTER_BARRIER 0x2008
-#define FINAL_BARRIER 0x200c
-#define DARTS_RT_ALIVE 0x6c
+#define INTER_BARRIER 0x6c //barrier are stored locally in each core
+#define FINAL_BARRIER 0x70
+#define START_FLAG 0x004b8 //flag is in DRAM, offset from symbol table of elf
 
 typedef struct params_s {
 	int size;
 	int pow;
 } params_t;
+
+typedef unsigned flag_t;
 
 
 //first arg: file name to input matrix
@@ -21,6 +24,10 @@ int main(int argc, char *argv[]){
 	e_platform_t platform;
 	e_epiphany_t dev;
 	e_mem_t e_mat_begin;
+	e_mem_t e_start_flag;
+
+	clock_t start_time, end_time;
+	double cpu_time;
 
 	//Initalize Epiphany device
 	e_init(NULL);
@@ -62,13 +69,19 @@ int main(int argc, char *argv[]){
 	mat_pow_params.size = size;
 	mat_pow_params.pow = pow;
 	
+	start_time = clock();
+
 	e_alloc(&e_mat_begin, 0x0, total_data_size);
-	e_load_group("e_darts_rt_init.elf", &dev, 0, 0, 4, 4, E_FALSE);
+	e_alloc(&e_start_flag, START_FLAG, sizeof(flag_t));
+	e_load_group("e_mat_pow.elf", &dev, 0, 0, 4, 4, E_FALSE);
 	printf("Group loaded \n");
 	e_start_group(&dev);
 	usleep(1e5);
 
 	e_write(&e_mat_begin, 0, 0, 0x0, &mat_pow_params, sizeof(mat_pow_params));
+	e_write(&e_mat_begin, 0, 0, 0x8, start, sizeof(int) * size * size);
+	flag_t start_flag = 1;
+	e_write(&e_start_flag, 0, 0, 0x0, &start_flag, sizeof(flag_t)); //signal start of computation
 
 	//read file into dynamically allocated array
 	//e_write size n to first location
@@ -83,16 +96,31 @@ int main(int argc, char *argv[]){
 	 * out=size x size bytes
 	 */
     
-
+	printf("Waiting for final barrier...\n");
+	int number;
 	for(int i=0; i<16; i++) { //wait for all cores to have darts_rt_alive = 0
 		number = 0;
 		while(number != 1) {
 	        	e_read(&dev, i/4, i%4, FINAL_BARRIER, &number, sizeof(number));
 		}
 	}
-	int sum = 0;
-	e_read(&e_mat_begin, 0, 0, 0x8, &sum, sizeof(int));
-	printf("sum received: %d\n", sum);
+	int *result = (int *) malloc(size * size * sizeof(int));
+	e_read(&e_mat_begin, 0, 0, 0x8 + size*size*sizeof(int)*2, result, size*size*sizeof(int)); //offset params, start, and inter
+
+	end_time = clock();
+
+	printf("[");
+	for (int i=0; i<size; i++) {
+		for (int j=0; j<size; j++) {
+			printf("\t%d", result[i*size+j]);
+		}
+		printf("\n");
+	}
+	printf("]\n");
+
+	cpu_time = ((double) (end_time-start_time)) / CLOCKS_PER_SEC;
+	printf("mat_pow took %lf seconds\n", cpu_time);
+
 	usleep(1e5);
 
 	e_close(&dev);

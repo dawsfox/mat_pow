@@ -1,6 +1,7 @@
 
-#define SUM_RESULT 0x2228
-#define FINAL_BARRIER 0x2008
+#define START_FLAG
+#define INTER_BARRIER 0x2008 //barrier for intermediate multiplies
+#define FINAL_BARRIER 0x200c //barrier for end of computation
 
 #define MAX_SIZE 10 //max nxn size for in matrix
 
@@ -16,3 +17,8 @@ typedef struct params_s {
 typedef struct matrix_space_s {
 	int matrix[MAX_SIZE*MAX_SIZE*3];
 } matrix_space_t;
+
+typedef unsigned flag_t;
+
+void copy_mat(int *in, int *out, int n);
+void mult_mat(int *x, int *y, int *out, int n);

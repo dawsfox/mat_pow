@@ -39,7 +39,7 @@ SET(CMAKE_SYSTEM_NAME Generic)
 set(EPIPHANY_HOME /opt/adapteva/esdk)
 set(ELDF_INTERNAL ${EPIPHANY_HOME}/bsps/current/internal.ldf)
 set(ELDF_FAST ${EPIPHANY_HOME}/bsps/current/fast.ldf)
-#set(ELDF_EDARTS_CACHEMAN ${CMAKE_SOURCE_DIR}/eDARTS/include/assets/fast_cacheman_codelets.ldf)
+set(ELDF_CACHEMAN ${CMAKE_SOURCE_DIR}/include/fast_cacheman.ldf)
 #set(ELDF_EDARTS ${CMAKE_SOURCE_DIR}/eDARTS/include/assets/darts.ldf)
 set(ELDF_MATPOW ${CMAKE_SOURCE_DIR}/include/epiphany/mat_pow.ldf)
 
@@ -159,10 +159,10 @@ endif()
 
 set(EPIPHANY_LIBS ${M_LIB} ${ELIB_LIB} ${GCC_LIB} ${G_LIB} ${C_LIB} ${EPIPHANY_LIB})
 
-#including eDARTS
-message("=> Starting mat_pow environment\n")
 add_subdirectory( src )
 include_directories( include
 		     include/epiphany
 		     include/arm)
+
+message("=> Starting mat_pow environment\n")
 

@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../src/../include/epiphany/e_mat_pow.h
+
+/home/parallella/parallel_arch/src/epiphany/e_mat_pow.c
+stdio.h
+-
+stdlib.h
+-
+e-lib.h
+/home/parallella/parallel_arch/src/epiphany/e-lib.h
+e_mat_pow.h
+/home/parallella/parallel_arch/src/epiphany/e_mat_pow.h
+
