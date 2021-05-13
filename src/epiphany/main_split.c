@@ -27,10 +27,15 @@ int main(int argc, char *argv[]){
 	e_mem_t e_mat_begin;
 	e_mem_t e_start_flag;
 
-
 	clock_t start_time, end_time;
 	double cpu_time;
 
+	//Initalize Epiphany device
+	e_init(NULL);
+	e_reset_system();//reset Epiphany
+	e_get_platform_info(&platform);
+	start_printing_server();
+	e_open(&dev, 0, 0, 4, 4);
 
 
 	if (argc != 4) {
@@ -58,15 +63,6 @@ int main(int argc, char *argv[]){
         }
         fclose(file_ptr);
 
-	start_time = clock();
-
-	//Initalize Epiphany device
-	e_init(NULL);
-	e_reset_system();//reset Epiphany
-	e_get_platform_info(&platform);
-	e_open(&dev, 0, 0, 4, 4);
-	start_printing_server();
-
 	// 4 + 4 for size and pow
 	// size * size * 4 for one matrix of ints
 	// * 3 for in, inter, and out
@@ -75,17 +71,21 @@ int main(int argc, char *argv[]){
 	mat_pow_params.size = size;
 	mat_pow_params.pow = pow;
 	
+	start_time = clock();
 
-	// from .elf
 	e_alloc(&e_mat_begin, 0x130, total_data_size);
 	e_alloc(&e_start_flag, START_FLAG, sizeof(flag_t));
-	int check = e_load_group("e_mat_pow.elf", &dev, 0, 0, 4, 4, E_FALSE);
-	printf("Group loaded (%d)\n", check);
+	e_load_group("e_mat_split_pow.elf", &dev, 0, 0, 4, 4, E_FALSE);
+	printf("Group loaded \n");
 	e_start_group(&dev);
 	usleep(1e5);
 
 	e_write(&e_mat_begin, 0, 0, 0x0, &mat_pow_params, sizeof(mat_pow_params));
-	e_write(&e_mat_begin, 0, 0, 0x8, start, sizeof(int) * size * size);
+	//e_write(&e_mat_begin, 0, 0, 0x8, start, sizeof(int) * size * size);
+	for (int i=0; i<16; i++) {
+		//offset taken from symbol table of elf file / linker script
+		e_write(&dev, i/4, i%4, 0x78, start, sizeof(int)*size*size);
+	}
 	flag_t start_flag = 1;
 	e_write(&e_start_flag, 0, 0, 0x0, &start_flag, sizeof(flag_t)); //signal start of computation
 
@@ -111,7 +111,7 @@ int main(int argc, char *argv[]){
 		}
 	}
 	int *result = (int *) malloc(size * size * sizeof(int));
-	e_read(&e_mat_begin, 0, 0, 0x8 + size*size*sizeof(int)*2, result, size*size*sizeof(int)); //offset params, start, and inter
+	e_read(&dev, 0, 0, 0x78 + size*size*sizeof(int)*2, result, size*size*sizeof(int)); //offset params, start, and inter
 
 	end_time = clock();
 
@@ -127,11 +127,13 @@ int main(int argc, char *argv[]){
 	cpu_time = ((double) (end_time-start_time)) / CLOCKS_PER_SEC;
 	printf("mat_pow took %lf seconds\n", cpu_time);
 
+	free(start);
+	free(result);
+
 	usleep(1e5);
 	stop_printing_server();
 	e_close(&dev);
 	e_finalize();
-
 	return EXIT_SUCCESS;
 }
 

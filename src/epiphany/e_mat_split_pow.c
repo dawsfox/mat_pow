@@ -9,6 +9,7 @@
 params_t _matPowParams __attribute__ ((section(".matPowParams")));
 matrix_space_t _matSpace __attribute__ ((section(".matSpace")));
 flag_t _startFlag __attribute__ ((section(".startFlag")));
+matrix_space_t _locMatSpace __attribute__ ((section(".locMatSpace")));
 
 // both in local core memory so different copies for each core
 flag_t _interBarrier __attribute__ ((section(".interBarrier")));
@@ -28,32 +29,19 @@ int main(void)
 	flag_t *start_flag = (flag_t *) &(_startFlag);
 	unsigned *inter_bar = (unsigned *) APPEND_COREID(this_core_id, &(_interBarrier));
 	unsigned *final_bar = (unsigned *) APPEND_COREID(this_core_id, &(_finalBarrier));
-	*inter_bar = 0;
 
 	while(*start_flag != 1); //wait for start signal
-
-	//e_darts_print("Gathering params...\n");
 
 	int pow = _matPowParams.pow;
 	int size = _matPowParams.size;
 	int row = e_group_config.core_row;
 	int col = e_group_config.core_col;
 
-	//unsigned start_i = 0; //index in matSpace where start begins
-	//unsigned inter_i = size*size; //index where inter begins
-	//unsigned end_i = size*size*2; //index where end begins
-
-	int *start = (int *) &(_matSpace.matrix[0]);
-	int *inter = (int *) &(_matSpace.matrix[size*size]);
-	int *end = (int *) &(_matSpace.matrix[size*size*2]);
-
-	//e_darts_print("Running computations\n");
-	if (e_group_config.core_row == 2 && e_group_config.core_col == 1) {
-		*start_flag = 0;
-	}
+	int *start = (int *) &(_locMatSpace.matrix[0]);
+	int *inter = (int *) &(_locMatSpace.matrix[size*size]);
+	int *end = (int *) &(_locMatSpace.matrix[size*size*2]);
 
 	if (pow == 0) {
-		// a debug case
 		if (row == 0 && col == 0) {
 			int sum = size * 2;
 			_matSpace.matrix[0] = sum;
@@ -67,42 +55,100 @@ int main(void)
 		copy_mat(start, end, size);
 	}
 	else if (pow > 1) {
-		for (int l=pow; l>1; l--) { //top level -- number of multiplies
+		int pow_block = (int) pow / 16; //split exponent into submultiplications
+		int pow_rem = pow % 16;
+		if (e_group_config.core_row == 0 && e_group_config.core_col == 0) {
+			e_darts_print("pow_block = %d, pow_rem = %d\n", pow_block, pow_rem);
+		}
+		for (int l=pow_block; l>1; l--) { //top level -- number of multiplies
 			// if handles intermediate copies
-			if (l == pow) {
+			if (l == pow_block) {
 				// on first run, multiplies in by itself, stores in out
-				mult_mat_block(start, start, end, size);
-				if (e_group_config.core_row == 2 && e_group_config.core_col == 1) {
-					*start_flag = 0;
-				}
+				full_mult_mat(start, start, end, size);
 			}
 			else {
 				// on every other run, multiplies in by inter
 				// stores in out
 				//mult_mat(start, inter, end, size);
-				if (e_group_config.core_row == 2 && e_group_config.core_col == 1) {
-					*start_flag = 0;
-				}
-				mult_mat_block(start, inter, end, size);
+				full_mult_mat(start, inter, end, size);
 			}
-			if (l > 2) {
 				// copies out back to inter except for last run
-				copy_mat_block(end, inter, size);
-				//copy_mat(end, inter, size);
-				*inter_bar = 1;
-				if (e_group_config.core_row == 2 && e_group_config.core_col == 1) {
-					//e_darts_print("(2,1) waiting for interBarrier\n");
-					while(check_inter_bar(&(_interBarrier)) != 1U);
-					//e_darts_print("interBarrier met\n");
-					*start_flag = 1;
-					*inter_bar = 0;
+			full_copy_mat(end, inter, size);
+		}
+		*inter_bar = 1U;
+		if (e_group_config.core_row == 0 && e_group_config.core_col == 0) {
+			while (check_inter_bar(inter_bar) == 0);
+			e_darts_print("interBarrier passed\n");
+			/*
+			e_darts_print("'end' address: %x\n", end);
+			e_darts_print("(0,0) has end:\n");
+			for (int i=0; i<size; i++) {
+				for (int j=0; j<size; j++) {
+					e_darts_print("%d ", end[i*size+j]);
 				}
-				else {
-					while(*start_flag != 1);
-					*inter_bar = 0;
+				e_darts_print("\n");
+			}
+			e_darts_print("(0,0) has start:\n");
+			for (int i=0; i<size; i++) {
+				for (int j=0; j<size; j++) {
+					e_darts_print("%d ", start[i*size+j]);
 				}
+				e_darts_print("\n");
+			}
+			e_darts_print("(0,0) has inter:\n"); //at this point inter is all 0s and I don't know why
+			for (int i=0; i<size; i++) {
+				for (int j=0; j<size; j++) {
+					e_darts_print("%d ", inter[i*size+j]);
+				}
+				e_darts_print("\n");
+			}
+			*/
+			// do remainder multiplications
+			for (int i=0; i<pow_rem; i++) {
+				full_mult_mat(start, inter, end, size);
+				full_copy_mat(end, inter, size);
+			}
+			/*
+			e_darts_print("After remainder multiplication\n");
+			e_darts_print("(0,0) has end:\n");
+			for (int i=0; i<size; i++) {
+				for (int j=0; j<size; j++) {
+					e_darts_print("%d ", end[i*size+j]);
+				}
+				e_darts_print("\n");
+			}
+			*/
+			// perform joining multiplications
+			for (int i=1; i<16; i++) {
+				//e_darts_print("'end' address: %x\n", end);
+				int *ext_out = (int *) APPEND_COREID(core_ids[i], end);
+				//e_darts_print("'ext_out' address: %x\n", ext_out);
+				// multiply with result from each other core
+				full_copy_mat(ext_out, start, size); //copy external to start
+				/*
+				e_darts_print("ext_out (as start, post-copy) has:\n");
+				for (int i=0; i<size; i++) {
+					e_darts_print("%d %d %d %d ", start[i*size], start[i*size+1], start[i*size+2], start[i*size+3]);
+					e_darts_print("%d %d %d %d ", start[i*size+4], start[i*size+5], start[i*size+6], start[i*size+7]);
+					e_darts_print("%d %d %d %d\n", start[i*size+8], start[i*size+9], start[i*size+10], start[i*size+11]);
+				}
+				*/
+				//full_mult_mat_ext(inter, ext_out, end, size, core_ids[i]);
+				//full_mult_mat(inter, ext_out, end, size);
+				full_mult_mat(inter, start, end, size); //multiply external (start) by inter (prior result)
+				/*
+				e_darts_print("end after mat mult:\n");
+				for (int i=0; i<size; i++) {
+					e_darts_print("%d %d %d %d ", end[i*size], end[i*size+1], end[i*size+2], end[i*size+3]);
+					e_darts_print("%d %d %d %d ", end[i*size+4], end[i*size+5], end[i*size+6], end[i*size+7]);
+					e_darts_print("%d %d %d %d\n", end[i*size+8], end[i*size+9], end[i*size+10], end[i*size+11]);
+				}
+				*/
+				// copy result back to inter
+				full_copy_mat(end, inter, size);
 			}
 		}
+
 	}
 	*final_bar = 1; //set final signal
 	return 0;
@@ -127,12 +173,31 @@ unsigned check_inter_bar(unsigned *inter_bar) {
 	result = result & (*((unsigned *)APPEND_COREID(core_ids[14], inter_bar)));
 	result = result & (*((unsigned *)APPEND_COREID(core_ids[15], inter_bar)));
 	return(result);
+	/*
+	unsigned result = 0;
+	for (int i=1; i<16; i++) {
+		unsigned flag = *((unsigned *)APPEND_COREID(core_ids[i], inter_bar));
+		result += flag;
+	}
+	if (result == 15) {
+		return(1);
+	}
+	else {
+		return(0);	
+	}
+	*/
 }
 
 void copy_mat(int *in, int *out, int n) {
 	int row = e_group_config.core_row;
 	int col = e_group_config.core_col;
 	out[row*n + col] = in[row*n + col];
+}
+
+void full_copy_mat(int *in, int *out, int n) {
+	for (int i=0; i<n*n; i++) {
+		out[i] = in[i];
+	}
 }
 
 void copy_mat_block(int *in, int *out, int n) {
@@ -203,4 +268,29 @@ void mult_mat(int *x, int *y, int *out, int n) {
 		acc += x[row*n + k] * y[k*n + col];
 	}
 	out[row*n + col] = acc;
+}
+
+void full_mult_mat(int *x, int *y, int *out, int n) {
+	for (int i=0; i<n; i++) {
+		for (int j=0; j<n; j++) {
+			int acc = 0;
+			for (int k=0; k<n; k++) {
+				acc += x[i*n+k] * y[k*n+j];
+			}
+			out[i*n+j] = acc;
+		}
+	}
+}
+
+void full_mult_mat_ext(int *x, int *y, int *out, int n, unsigned coreID) {
+	int *ext = (int *) APPEND_COREID(coreID, y);
+	for (int i=0; i<n; i++) {
+		for (int j=0; j<n; j++) {
+			int acc = 0;
+			for (int k=0; k<n; k++) {
+				acc += x[i*n+k] * ext[k*n+j];
+			}
+			out[i*n+j] = acc;
+		}
+	}
 }

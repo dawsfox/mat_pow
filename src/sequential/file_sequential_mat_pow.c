@@ -1,8 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-//#include "e-hal.h"
-//#include "e-loader.h"
+#include <time.h>
 
 //takes input square matrix in_mat with size nxn, raises it to power pow, outputs to out_mat
 int mat_pow(int *in_mat, int size, int *out_mat, int pow);
@@ -17,6 +16,10 @@ void mult_mat(int *x, int *y, int *out, int n);
 //second: n size (nxn of input matrix)
 //third: pow to raise matrix to
 int main(int argc, char *argv[]){
+
+	clock_t start_time, end_time;
+	double cpu_time;
+
 	if (argc != 4) {
 		printf("incorrect number of args given, exiting\n");
 		return 1;
@@ -46,7 +49,13 @@ int main(int argc, char *argv[]){
 	printf("power: %d, input matrix:\n", pow);
 	print_mat(start, size);
         printf("starting exponentiation\n");
+
+	start_time = clock();
+
 	int result = mat_pow(start, size, end, pow);
+
+	end_time = clock();
+
 	printf("exponentiation complete\n");
 	if (result == 0) {
 		print_mat(end, size);
@@ -58,6 +67,11 @@ int main(int argc, char *argv[]){
 		printf("***** pow=1, out=in *****\n");
 		print_mat(end, size);
 	}
+
+	cpu_time = ((double) (end_time-start_time)) / CLOCKS_PER_SEC;
+	printf("mat_pow took %lf seconds\n", cpu_time);
+
+
 	free(start);
 	free(end);
 
@@ -84,7 +98,7 @@ int mat_pow(int *in_mat, int size, int *out_mat, int pow) {
 		// perform calculation
 		int *inter = malloc(sizeof(int) * size * size);
 		for (int l=pow; l>1; l--) { //top level -- number of multiplies
-			printf("executing multiplication %d\n", pow - l + 1);
+			//printf("executing multiplication %d\n", pow - l + 1);
 			// if handles intermediate copies
 			if (l == pow) {
 				// on first run, multiplies in by itself, stores in out

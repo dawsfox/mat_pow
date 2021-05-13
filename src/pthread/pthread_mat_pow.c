@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <time.h>
 #include <pthread.h>
 #include "pthread_mat_pow.h"
 
@@ -8,6 +9,10 @@
 //second: n size (nxn of input matrix)
 //third: pow to raise matrix to
 int main(int argc, char *argv[]){
+
+	clock_t start_time, end_time;
+	double cpu_time;
+
 	if (argc != 4) {
 		printf("incorrect number of args given, exiting\n");
 		return 1;
@@ -46,6 +51,9 @@ int main(int argc, char *argv[]){
 	// print input info
 	printf("power: %d, input matrix:\n", pow);
 	print_mat(start, size);
+
+	start_time = clock();
+
 	if (pow >= 4) { //if 3 or more multiplications to be performed
 		pthread_args_t thread_args;
 		thread_args.in_mat = (int *) malloc(sizeof(int) * size * size);
@@ -71,12 +79,18 @@ int main(int argc, char *argv[]){
 		pthread_join(id, NULL); //wait for thread to finish
 		printf("thread finished, multiplying results\n");
 		mult_mat(end, thread_args.out_mat, final, size);
+
+		end_time = clock();
+
 		print_mat(final, size);
 
 	}
 	else {
         	printf("starting exponentiation\n");
 		int result = mat_pow(start, size, end, pow);
+
+		end_time = clock();
+
 		printf("exponentiation complete\n");
 		if (result == 0) {
 			print_mat(end, size);
@@ -89,6 +103,10 @@ int main(int argc, char *argv[]){
 			print_mat(end, size);
 		}
 	}
+
+	cpu_time = ((double) (end_time-start_time)) / CLOCKS_PER_SEC;
+	printf("mat_pow took %lf seconds\n", cpu_time);
+
 	free(start);
 	free(end);
 
@@ -106,7 +124,7 @@ void *mat_pow_thread(void *arguments) {
 	// perform calculation
 	int *inter = malloc(sizeof(int) * size * size);
 	for (int l=pow; l>1; l--) { //top level -- number of multiplies
-		printf("executing multiplication (thread) %d\n", pow - l + 1);
+		//printf("executing multiplication (thread) %d\n", pow - l + 1);
 		// if handles intermediate copies
 		if (l == pow) {
 			// on first run, multiplies in by itself, stores in out
@@ -146,7 +164,7 @@ int mat_pow(int *in_mat, int size, int *out_mat, int pow) {
 		// perform calculation
 		int *inter = malloc(sizeof(int) * size * size);
 		for (int l=pow; l>1; l--) { //top level -- number of multiplies
-			printf("executing multiplication (main) %d\n", pow - l + 1);
+			//printf("executing multiplication (main) %d\n", pow - l + 1);
 			// if handles intermediate copies
 			if (l == pow) {
 				// on first run, multiplies in by itself, stores in out

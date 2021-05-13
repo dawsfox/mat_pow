@@ -1,9 +1,9 @@
 set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -T ${ELDF_MATPOW}")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -T ${ELDF_MATPOW} ${CMAKE_BINARY_DIR}/src/softcache/cachemanager.o")
 
-include_directories( ../include
-                     ../include/epiphany
-                     ../include/arm)
+include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/../include
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../include/epiphany
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../include/arm)
 
 add_subdirectory(softcache)
 
@@ -12,7 +12,7 @@ add_subdirectory(softcache)
 if(DEBUG)
     set(EXTERNAL_FLAGS -I${EPIPHANY_HOME}/tools/host/include -L${PTHREAD_LIB} -lpthread ${E_LOADER_LIB} ${E_HAL_LIB} -g)
 else()
-    set(EXTERNAL_FLAGS -I${EPIPHANY_HOME}/tools/host/include -I${CMAKE_SOURCE_DIR}/eDARTS/include -I${CMAKE_SOURCE_DIR}/eDARTS/include/runtime/host -L${CMAKE_BINARY_DIR}/eDARTS/src/runtime/host -ldarts_api -ldarts_print_server -L${PTHREAD_LIB} -lpthread ${E_LOADER_LIB} ${E_HAL_LIB})
+    set(EXTERNAL_FLAGS -I${EPIPHANY_HOME}/tools/host/include -L${PTHREAD_LIB} -lpthread ${E_LOADER_LIB} ${E_HAL_LIB})
 endif()
 
 # For the host we need to compile manually without cmake
@@ -47,8 +47,8 @@ add_custom_target( pthread
 
 add_custom_command(
    OUTPUT epiphany_mat_pow.out
-   COMMAND gcc epiphany/main.c ${EXTERNAL_FLAGS} -o epiphany_mat_pow.out
-   DEPENDS epiphany/main.c
+   COMMAND gcc epiphany/main.c epiphany/darts_print_server.c ${EXTERNAL_FLAGS} -o epiphany_mat_pow.out
+   DEPENDS epiphany/main.c epiphany/darts_print_server.c
    COMMENT "CROSS-COMPILING HOST FILE epiphany_mat_pow.out"
    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
    VERBATIM
@@ -56,12 +56,28 @@ add_custom_command(
 
 add_custom_target( epiphany_mat_pow
 	           COMMAND mv ${CMAKE_CURRENT_SOURCE_DIR}/epiphany_mat_pow.out ${CMAKE_CURRENT_BINARY_DIR}/epiphany_mat_pow
-		   DEPENDS epiphany_mat_pow.out epiphany/main.c)
+		   DEPENDS epiphany_mat_pow.out epiphany/main.c epiphany/darts_print_server.c)
 
 # For e_mat_pow.elf
-add_executable(e_mat_pow.elf epiphany/e_mat_pow.c)
+add_executable(e_mat_pow.elf epiphany/e_mat_pow.c epiphany/e_darts_print.c epiphany/e_darts_mutex.c)
 target_link_libraries(e_mat_pow.elf ${EPIPHANY_LIBS})
 add_dependencies(e_mat_pow.elf cachemanager)
 
-#add_dependencies(e_mat_pow.elf darts_fib_test darts_api edarts_cachemanager)
-#add_dependencies(e_mat_pow.elf)
+
+add_custom_command(
+   OUTPUT epiphany_mat_split_pow.out
+   COMMAND gcc epiphany/main_split.c epiphany/darts_print_server.c ${EXTERNAL_FLAGS} -o epiphany_mat_split_pow.out
+   DEPENDS epiphany/main_split.c epiphany/darts_print_server.c
+   COMMENT "CROSS-COMPILING HOST FILE epiphany_mat_split_pow.out"
+   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+   VERBATIM
+)
+
+add_custom_target( epiphany_mat_split_pow
+	           COMMAND mv ${CMAKE_CURRENT_SOURCE_DIR}/epiphany_mat_split_pow.out ${CMAKE_CURRENT_BINARY_DIR}/epiphany_mat_split_pow
+		   DEPENDS epiphany_mat_split_pow.out epiphany/main_split.c)
+
+# For e_mat_split_pow.elf
+add_executable(e_mat_split_pow.elf epiphany/e_mat_split_pow.c epiphany/e_darts_print.c epiphany/e_darts_mutex.c)
+target_link_libraries(e_mat_split_pow.elf ${EPIPHANY_LIBS})
+add_dependencies(e_mat_split_pow.elf cachemanager)

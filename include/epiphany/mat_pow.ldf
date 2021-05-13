@@ -125,11 +125,16 @@ SECTIONS
 	    . = 0x10; /* force allocation */
 	  } > WORKGROUP_RAM /* 58 5C 60 64 */
 
+	printingMutex : {*(printingMutex)} > PRINT_MUTEX_POINTER
+
 	/* section reserved for interim barrier */
 	.interBarrier : {*(.interBarrier)} > INTERNAL_RAM
 
 	/* section reserved for final barrier */
 	.finalBarrier : {*(.finalBarrier)} > INTERNAL_RAM
+
+	/* section reserved for local matrix calculations */
+	.locMatSpace : {*(.locMatSpace)} > INTERNAL_RAM
 
 	/* place the ISR handlers after workgroup-configuration */
 	.reserved_crt0 : {*.o(RESERVED_CRT0) *.o(reserved_crt0)} > INTERNAL_RAM
@@ -156,6 +161,9 @@ SECTIONS
 	/* the newlib  (libc and libm) library is mapped to the dedicated section */
 	/* create offset with location counter                                    */
 	. = (ORIGIN(EXTERNAL_DRAM_0) + __PROG_SIZE_FOR_CORE_ * __CORE_NUM_);
+
+	/* Reservered section for print buffer */
+	.printBuffer . : {*(.printBuffer)} > EXTERNAL_DRAM_0
 
         /* Reserved for mat_pow params from ARM */
         .matPowParams . : {*(.matPowParams)} > EXTERNAL_DRAM_0
